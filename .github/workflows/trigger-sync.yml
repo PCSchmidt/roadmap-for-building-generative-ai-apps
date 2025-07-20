@@ -1,0 +1,27 @@
+name: 🔄 Portfolio Sync Trigger
+
+on:
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App name that triggered the update'
+        required: false
+        default: 'manual'
+
+jobs:
+  trigger-portfolio-update:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📡 Trigger Main Repository Update
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: PCSchmidt/roadmap-for-building-generative-ai-apps
+        event-type: app-updated
+        client-payload: |
+          {
+            "app_name": "${{ github.event.inputs.app_name || github.repository }}",
+            "timestamp": "${{ github.event.repository.updated_at }}",
+            "repository_url": "${{ github.event.repository.html_url }}"
+          }

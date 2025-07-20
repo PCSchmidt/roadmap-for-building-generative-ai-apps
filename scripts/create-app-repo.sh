@@ -171,50 +171,111 @@ async def health_check():
 # Add your app-specific endpoints here
 EOF
 
-# Create GitHub Actions workflow
-cat > .github/workflows/ci.yml << EOF
-name: CI/CD Pipeline
+# Create GitHub Actions workflow with portfolio integration
+cat > .github/workflows/ci-cd-portfolio.yml << 'EOF'
+name: 🚀 CI/CD + Portfolio Update
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  release:
+    types: [ published ]
 
 jobs:
   test-backend:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v3
+    - name: 🏗️ Checkout
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-    - name: Install dependencies
+        
+    - name: 📦 Install Dependencies
       run: |
         cd backend
         pip install -r requirements.txt
-    - name: Run tests
+        
+    - name: 🧪 Run Tests
       run: |
         cd backend
-        pytest
+        python -m pytest --cov=app --cov-report=term-missing
 
   test-frontend:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
+    - name: 🏗️ Checkout
+      uses: actions/checkout@v4
+      
+    - name: 📱 Set up Node.js
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
-    - name: Install dependencies
+        
+    - name: 📦 Install Dependencies
       run: |
         cd frontend
-        npm install
-    - name: Run tests
+        npm ci
+        
+    - name: 🧪 Run Tests
       run: |
         cd frontend
-        npm test
+        npm test -- --coverage --watchAll=false
+
+  deploy:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 🚀 Deploy to Production
+      run: |
+        echo "🚀 Deploying $REPO_NAME to production..."
+        # Add your deployment commands here
+        
+    - name: 📊 Notify Portfolio of Deployment
+      if: success()
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: PCSchmidt/roadmap-for-building-generative-ai-apps
+        event-type: app-updated
+        client-payload: |
+          {
+            "app_name": "${{ github.repository }}",
+            "status": "deployed",
+            "timestamp": "${{ github.event.repository.updated_at }}",
+            "commit_sha": "${{ github.sha }}"
+          }
+
+  update-demo:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: 📺 Update Live Demo
+      run: |
+        echo "📺 Updating live demo for $REPO_NAME..."
+        # Commands to update Hugging Face Spaces or other demos
+        
+    - name: 🎯 Notify Portfolio of Demo Update
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: PCSchmidt/roadmap-for-building-generative-ai-apps
+        event-type: app-updated
+        client-payload: |
+          {
+            "app_name": "${{ github.repository }}",
+            "status": "demo_updated",
+            "demo_url": "https://huggingface.co/spaces/pcschmidt/$APP_NAME",
+            "timestamp": "${{ github.event.repository.updated_at }}"
+          }
 EOF
 
 # Create issue template

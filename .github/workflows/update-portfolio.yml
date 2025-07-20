@@ -1,0 +1,70 @@
+name: 📊 Auto-Update Portfolio Statistics
+
+on:
+  # Run daily at 6 AM UTC
+  schedule:
+    - cron: '0 6 * * *'
+  
+  # Run when manually triggered
+  workflow_dispatch:
+  
+  # Run when README or scripts are updated
+  push:
+    paths:
+      - 'scripts/update-portfolio-stats.sh'
+      - 'README.md'
+
+  # Run when triggered by app repositories via repository_dispatch
+  repository_dispatch:
+    types: [app-updated]
+
+jobs:
+  update-portfolio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: 🏗️ Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 🔧 Setup GitHub CLI
+      run: |
+        type -p curl >/dev/null || sudo apt update && sudo apt install curl -y
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh -y
+        
+    - name: 🔐 Authenticate GitHub CLI
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      
+    - name: 📊 Update Portfolio Statistics
+      run: |
+        chmod +x scripts/update-portfolio-stats.sh
+        ./scripts/update-portfolio-stats.sh
+        
+    - name: 🚀 Commit and Push Changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "Portfolio Bot"
+        
+        if ! git diff --quiet README.md; then
+          git add README.md
+          git commit -m "🤖 Auto-update portfolio statistics
+          
+          📊 Updated portfolio metrics:
+          - Repository status across all 10 apps
+          - GitHub stars and forks count
+          - Live demos and deployment status
+          - Progress percentages
+          
+          🕐 Last updated: $(date -u)"
+          git push
+          echo "✅ Portfolio statistics updated successfully!"
+        else
+          echo "ℹ️ No changes detected in portfolio statistics"
+        fi
