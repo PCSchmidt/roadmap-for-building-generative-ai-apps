@@ -1,0 +1,43 @@
+{
+  "name": "roadmap-generative-ai-apps",
+  "version": "1.0.0",
+  "description": "Central hub and roadmap for building 10 commercializable generative AI mobile applications",
+  "scripts": {
+    "create-app": "./scripts/create-app-repo.sh",
+    "update-stats": "./scripts/update-portfolio-stats.sh",
+    "setup": "./scripts/setup.sh",
+    "docs:dev": "mkdocs serve",
+    "docs:build": "mkdocs build",
+    "lint:docs": "markdownlint docs/**/*.md README.md",
+    "test:scripts": "shellcheck scripts/*.sh"
+  },
+  "devDependencies": {
+    "markdownlint-cli": "^0.37.0"
+  },
+  "keywords": [
+    "generative-ai",
+    "mobile-apps",
+    "portfolio",
+    "roadmap",
+    "langchain",
+    "llama-index",
+    "vector-database",
+    "ai-applications",
+    "machine-learning",
+    "react-native",
+    "fastapi"
+  ],
+  "author": "PCSchmidt",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PCSchmidt/roadmap-for-building-generative-ai-apps.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PCSchmidt/roadmap-for-building-generative-ai-apps/issues"
+  },
+  "homepage": "https://github.com/PCSchmidt/roadmap-for-building-generative-ai-apps#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
