@@ -1,0 +1,196 @@
+name: Sync App Development Progress
+
+on:
+  # Run every 6 hours to track development progress
+  schedule:
+    - cron: '0 */6 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+  
+  # Trigger when apps push updates via repository_dispatch
+  repository_dispatch:
+    types: [app-progress-update]
+
+jobs:
+  sync-progress:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout roadmap repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Setup dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+    
+    - name: Clone all app repositories
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Create temporary workspace for app repos
+        mkdir -p /tmp/apps
+        cd /tmp/apps
+        
+        # Clone each app repository
+        apps=(
+          "generative-ai-journal-summarizer"
+          "generative-ai-icebreaker-generator"
+          "generative-ai-flashcard-creator"
+          "generative-ai-meme-generator"
+          "generative-ai-travel-planner"
+          "generative-ai-recipe-generator"
+          "generative-ai-study-buddy"
+          "generative-ai-workout-planner"
+          "generative-ai-story-starter"
+          "generative-ai-budget-tracker"
+        )
+        
+        for app in "${apps[@]}"; do
+          echo "Cloning $app..."
+          if git clone "https://github.com/PCSchmidt/$app.git" 2>/dev/null; then
+            echo "✅ Successfully cloned $app"
+          else
+            echo "⚠️ Could not clone $app (may not exist yet)"
+          fi
+        done
+    
+    - name: Analyze development progress
+      run: |
+        # Update the sync script to work with GitHub Actions environment
+        sed -i 's|BASE_DIR="c:/Users/pchri/Documents/Copilot"|BASE_DIR="/tmp/apps"|g' scripts/sync-app-progress.sh
+        sed -i 's|PROGRESS_FILE="data/app-progress.json"|PROGRESS_FILE="data/app-progress.json"|g' scripts/sync-app-progress.sh
+        
+        # Make script executable and run it
+        chmod +x scripts/sync-app-progress.sh
+        ./scripts/sync-app-progress.sh
+    
+    - name: Generate detailed progress report
+      run: |
+        # Create a detailed progress report
+        cat << 'EOF' > data/progress-report.md
+        # Development Progress Report
+        
+        Generated: $(date)
+        
+        ## Summary
+        
+        This report tracks the development progress of all 10 AI mobile applications in the portfolio.
+        
+        ## Individual App Progress
+        
+        EOF
+        
+        # Add individual app details from JSON
+        if [[ -f "data/app-progress.json" ]]; then
+          echo "Processing app progress data..."
+          jq -r '
+            .apps | to_entries[] | 
+            "### " + .value.display_name + "\n" +
+            "- **Progress:** " + (.value.progress.progress | tostring) + "%\n" +
+            "- **Status:** " + .value.progress.status + "\n" +
+            "- **Commits:** " + (.value.progress.commits | tostring) + "\n" +
+            "- **Files:** " + (.value.progress.files | tostring) + "\n" +
+            "- **Features:** " + (.value.progress.features | join(", ")) + "\n" +
+            "- **GitHub:** [Repository](https://github.com/PCSchmidt/" + .value.repository + ")\n"
+          ' data/app-progress.json >> data/progress-report.md
+        fi
+    
+    - name: Update documentation with progress
+      run: |
+        # Ensure README.md exists
+        if [[ ! -f "README.md" ]]; then
+          echo "README.md not found, creating minimal version"
+          cat << 'EOF' > README.md
+        # Generative AI Mobile Apps Roadmap
+        
+        ## Progress Tracking
+        
+        This section is automatically updated with development progress.
+        
+        EOF
+        fi
+        
+        # The sync script already updates README.md
+        echo "README.md will be updated by sync script"
+    
+    - name: Commit and push changes
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add changes
+        git add data/ README.md
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          # Commit changes
+          git commit -m "🤖 Auto-update: Development progress sync $(date '+%Y-%m-%d %H:%M:%S')"
+          
+          # Push changes
+          git push
+          
+          echo "✅ Progress updates pushed to repository"
+        fi
+    
+    - name: Create progress summary comment
+      if: github.event_name == 'repository_dispatch'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // If triggered by an app update, create a summary comment
+          const fs = require('fs');
+          
+          if (fs.existsSync('data/app-progress.json')) {
+            const progressData = JSON.parse(fs.readFileSync('data/app-progress.json', 'utf8'));
+            const triggeredApp = context.payload.client_payload?.app_name || 'Unknown';
+            
+            let summary = `## 🚀 Development Progress Update\n\n`;
+            summary += `Triggered by: **${triggeredApp}**\n\n`;
+            summary += `### Portfolio Overview\n`;
+            
+            const apps = Object.entries(progressData.apps);
+            const totalProgress = apps.reduce((sum, [, app]) => sum + app.progress.progress, 0) / apps.length;
+            
+            summary += `- **Total Apps:** ${apps.length}\n`;
+            summary += `- **Average Progress:** ${Math.round(totalProgress)}%\n`;
+            summary += `- **Last Updated:** ${progressData.last_updated}\n\n`;
+            
+            summary += `### Recent App Updates\n`;
+            apps.forEach(([key, app]) => {
+              summary += `- **${app.display_name}:** ${app.progress.progress}% (${app.progress.status})\n`;
+            });
+            
+            // This would create an issue comment if there were any issues to comment on
+            console.log(summary);
+          }
+    
+    - name: Notify on significant progress
+      if: success()
+      run: |
+        # Check for significant progress milestones
+        if [[ -f "data/app-progress.json" ]]; then
+          total_progress=$(jq '[.apps[].progress.progress] | add / length | floor' data/app-progress.json)
+          completed_apps=$(jq '[.apps[] | select(.progress.status == "production_ready")] | length' data/app-progress.json)
+          
+          echo "Portfolio Progress: ${total_progress}%"
+          echo "Completed Apps: ${completed_apps}/10"
+          
+          # Log milestone achievements
+          if [[ $total_progress -ge 50 ]]; then
+            echo "🎉 Milestone: Portfolio is 50%+ complete!"
+          fi
+          
+          if [[ $completed_apps -ge 5 ]]; then
+            echo "🚀 Milestone: 5+ apps are production ready!"
+          fi
+        fi
